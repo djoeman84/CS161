@@ -307,6 +307,7 @@ class Blacklist {
   private int size_n;
   private int size_nodes_m;
   private int size_nodes_n;
+  private BlacklistType btype;
 
   public Blacklist (int size_m, int size_n, BlacklistType t) {
     assert (size_m != 0 && size_n != 0);
@@ -314,11 +315,25 @@ class Blacklist {
     this.size_n = size_n;
     this.size_nodes_m = this.size_m * 2 + 1;
     this.size_nodes_n = this.size_n + 1;
+    this.btype = t;
 
-    /* +1 since it is a node map, not an entry map */
-    blacklist_bounds = new int[this.size_nodes_m]
-                      [this.size_nodes_n][NUM_BOUNDS];
-    blacklist_initialized = new boolean[this.size_nodes_m][this.size_nodes_n];
+
+    if (this.btype == BlacklistType.NORMAL)
+      {
+        /* +1 since it is a node map, not an entry map */
+        blacklist_bounds = new int[this.size_nodes_m]
+                          [this.size_nodes_n][NUM_BOUNDS];
+        blacklist_initialized = new boolean[this.size_nodes_m]
+                          [this.size_nodes_n];
+      }
+    else
+      {
+        /* +1 since it is a node map, not an entry map */
+        blacklist_bounds = new int[this.size_nodes_n]
+                          [this.size_nodes_m][NUM_BOUNDS];
+        blacklist_initialized = new boolean[this.size_nodes_n]
+                          [this.size_nodes_m];
+      }
   }
 
   public void print () {
@@ -327,12 +342,12 @@ class Blacklist {
 
       for (int row = 0; row < this.size_nodes_m; row++) {
         for (int col = 0; col < this.size_nodes_n; col++) {
-          if (blacklist_initialized[row][col])
+          if (getIsInitialized(row, col, 0))
             {
               format += "\t(";
-              format += Integer.toString(blacklist_bounds[row][col][ABOVE_INDEX]);
+              format += Integer.toString(getBound(row, col, 0, ABOVE_INDEX));
               format += ",";
-              format += Integer.toString(blacklist_bounds[row][col][BELOW_INDEX]);
+              format += Integer.toString(getBound(row, col, 0, BELOW_INDEX));
               format += ")";
             }
           else
@@ -350,24 +365,49 @@ class Blacklist {
   public void blacklist (int row, int col, int offset_y) {
     if (isValidIndex (row, col, offset_y))
       {
-        int lower = blacklist_bounds[row + offset_y][col][ABOVE_INDEX];
-        int upper = blacklist_bounds[row + offset_y][col][BELOW_INDEX];
-
-        if (!blacklist_initialized[row + offset_y][col])
+        if (!getIsInitialized(row, col, offset_y))
           {
-            blacklist_bounds[row + offset_y][col][ABOVE_INDEX] = offset_y;
-            blacklist_bounds[row + offset_y][col][BELOW_INDEX] = offset_y;
+            setBound(row, col, offset_y, ABOVE_INDEX);
+            setBound(row, col, offset_y, BELOW_INDEX);
           }
         else 
           {
-            if (offset_y < lower)
-              blacklist_bounds[row + offset_y][col][ABOVE_INDEX] = offset_y;
-            if (offset_y > upper)
-              blacklist_bounds[row + offset_y][col][BELOW_INDEX] = offset_y;
-          }
+            /* lower bound */
+            if (offset_y < getBound(row, col, offset_y, ABOVE_INDEX))
+              setBound(row, col, offset_y, ABOVE_INDEX);
 
-        blacklist_initialized[row + offset_y][col] = true;
+            /* upper bound */
+            if (offset_y > getBound(row, col, offset_y, BELOW_INDEX))
+              setBound(row, col, offset_y, BELOW_INDEX);
+          }
+        setIsInitialized(row, col, offset_y, true);
       }
+  }
+
+  private int getBound (int row, int col, int offset_y, int bound) {
+    return this.btype == BlacklistType.NORMAL ? 
+            blacklist_bounds[row + offset_y][col][bound] :
+            blacklist_bounds[col][row + offset_y][bound];
+  }
+
+  private void setBound (int row, int col, int offset_y, int bound) {
+    if (this.btype == BlacklistType.NORMAL)
+      blacklist_bounds[row + offset_y][col][bound] = offset_y;
+    else
+      blacklist_bounds[col][row + offset_y][bound] = offset_y;
+  }
+
+  private boolean getIsInitialized (int row, int col, int offset_y) {
+    return this.btype == BlacklistType.NORMAL ?
+            blacklist_initialized[row + offset_y][col] :
+            blacklist_initialized[col][row + offset_y];
+  }
+
+  private void setIsInitialized (int row, int col, int offset_y, boolean value) {
+    if (this.btype == BlacklistType.NORMAL)
+      blacklist_initialized[row + offset_y][col] = value;
+    else
+      blacklist_initialized[col][row + offset_y] = value;
   }
 
   private boolean isValidIndex (int row, int col, int offset_y) {
@@ -395,23 +435,23 @@ class Blacklist {
 
   private int getBelowBoundPathNum (int row, int col, int offset_y) {
     /* iterate over all higher bits, check if bits are on, return on index */ 
-    if (!blacklist_initialized[row][col])
+    if (!getIsInitialized(row, col, 0))
       return -1;
-    if (blacklist_bounds[row][col][ABOVE_INDEX] > offset_y)
-      return blacklist_bounds[row][col][ABOVE_INDEX];
-    if (blacklist_bounds[row][col][BELOW_INDEX] > offset_y)
-      return blacklist_bounds[row][col][BELOW_INDEX];
+    if (getBound(row, col, 0, ABOVE_INDEX) > offset_y)
+      return getBound(row, col, 0, ABOVE_INDEX);
+    if (getBound(row, col, 0, BELOW_INDEX) > offset_y)
+      return getBound(row, col, 0, BELOW_INDEX);
     return -1;
   }
 
   private int getAboveBoundPathNum (int row, int col, int offset_y) {
     /* iterate over all lower bits, check if bits are on in any */
-    if (!blacklist_initialized[row][col])
+    if (!getIsInitialized(row, col, 0))
       return -1;
-    if (blacklist_bounds[row][col][BELOW_INDEX] < offset_y)
-      return blacklist_bounds[row][col][BELOW_INDEX];
-    if (blacklist_bounds[row][col][ABOVE_INDEX] < offset_y)
-      return blacklist_bounds[row][col][ABOVE_INDEX];
+    if (getBound(row, col, 0, ABOVE_INDEX) < offset_y)
+      return getBound(row, col, 0, ABOVE_INDEX);
+    if (getBound(row, col, 0, BELOW_INDEX) < offset_y)
+      return getBound(row, col, 0, BELOW_INDEX);
     return -1;
   }
 }
