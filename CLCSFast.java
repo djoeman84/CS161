@@ -3,113 +3,77 @@ import java.util.*;
 
 class CLCSFast {
 
-  static int[][] window;
+  static Window window;
   static char[] M, N;
   static int max_path;
-  static Blacklist blacklist;
+  static Blacklist blacklist_up;
+  static Blacklist blacklist_down;
+
+  static final boolean DEBUG = false;
 
   static char getMChar (int row, int offset_y) {
     return M[(row + offset_y) % M.length];
   }
 
-  static int getCell (int row, int col, int offset_y) {
-    if (row < 0 || col < 0)
-      return 0;
-    return window[row][col];
+  static char getNChar (int col) {
+    return N[col];
   }
 
-  static void printWindow (int offset_y) {
-    System.out.format("\nWindow: offset_y = %d\n", offset_y);
-    System.out.format("\t");
-    for (int col = 0; col < N.length; col++) {
-      System.out.format(" %c ", N[col]);
-    }
-
-    System.out.format("\n");
-    for (int row = 0; row < M.length; row++) {
-      System.out.format("%c\t", M[(row + offset_y) % M.length]);
-      for (int col = 0; col < N.length; col++) {
-        System.out.format(" %d ", window[row][col]);
-      }
-      System.out.format("\n");
-    }
-    System.out.format("\n");
+  static boolean charMatchAt (int row, int col, int offset_y) {
+    return getMChar(row, offset_y) == getNChar(col);
   }
 
-  static void clearWindow () {
-    System.out.println("WARNING::: REMOVE THIS CALL-- clearWindow");
-    for (int row = 0; row < M.length; row++) {
-      for (int col = 0; col < N.length; col++) {
-        window[row][col] = -1;
-      }
+
+  static void updateBlacklists (int offset_y) {
+    int node_row     = M.length;
+    int node_col     = N.length;
+
+    while(true) {
+      if (node_row == 0 && node_col == 0)
+        {
+          return;
+        }
+
+      if (node_row == 0)
+        {
+          node_col--;
+          blacklist_down.blacklist(node_row + 1, node_col, offset_y);
+          continue;
+        }
+
+      if (node_col == 0)
+        {
+          node_row--;
+          blacklist_up.blacklist(node_row, node_col + 1, offset_y);
+          continue;         
+        }
+
+      int row = node_row - 1;
+      int col = node_col - 1;
+
+
+      if (charMatchAt(row, col, offset_y))
+        {
+          node_row--;
+          node_col--;
+
+          blacklist_up.blacklist(node_row, node_col + 1, offset_y);
+          blacklist_down.blacklist(node_row + 1, node_col, offset_y);
+          continue;          
+        }
+
+      if (window.getCell(row, col - 1, offset_y) 
+            == window.getCell(row, col, offset_y))
+        {
+          node_col--;
+          blacklist_down.blacklist(node_row + 1, node_col, offset_y);
+        }
+      else
+        {
+          node_row--;
+          blacklist_up.blacklist(node_row, node_col + 1, offset_y);
+        }
     }
-  }
-
-  static void updateBlacklist (int offset_y) {
-    for (int row = M.length - 1; row >= 0;) {
-      for (int col = N.length - 1; col >= 0; ) {
-        
-        blacklist.setPath(row + offset_y, col, offset_y);
-
-        if (row == 0 && col == 0)
-            return;
-
-        if (row == 0)
-          {
-              col--;
-              continue;
-          }
-        if (col == 0 || col <= blacklist.leftMostValidRow (row, col, offset_y))
-          {
-            row--;
-            continue;
-          }
-
-
-        if (getMChar(row, offset_y) == N[col])
-          {
-            if (getCell(row - 1, col - 1, offset_y) 
-                == (getCell(row, col, offset_y) - 1))
-              {
-                row--;
-                col--;
-                continue;
-              }
-          }
-        
-        if (getCell(row - 1, col, offset_y) == getCell(row, col, offset_y))
-          row--;
-        else
-          col--;
-
-      }
-    }
-  }
-
-  static int SolveWindow (int offset_y) {
-    int col_hint = 1;
-    for (int row = 0; row < M.length; row++) {
-
-      int leftMostRow = blacklist.leftMostValidRow (row, col_hint, offset_y);
-      System.out.format("leftMostValidRow = %d\n", leftMostRow);
-      col_hint = leftMostRow + 1;
-      for (int col = leftMostRow; col < N.length; col++) {
-
-        window[row][col] = Math.max(
-                            getCell(row - 1, col, offset_y),
-                            getCell(row, col - 1, offset_y));
-
-        if (M[(row + offset_y) % M.length] == N[col])
-          window[row][col] = Math.max(
-                            getCell(row, col, offset_y),
-                            getCell(row - 1, col - 1, offset_y) + 1);
-      }
-    }
-
-    printWindow (offset_y);
-    System.out.println(blacklist);
-
-    return window[M.length - 1][N.length - 1];
   }
 
   static void findShortestPaths (int lower, int upper) {
@@ -120,9 +84,13 @@ class CLCSFast {
 
     // System.out.format("lower: %d upper: %d\n", lower, upper);
 
-    clearWindow();
-    int score = SolveWindow (mid);
-    updateBlacklist (mid);
+
+    int score = window.solve (mid);
+    updateBlacklists (mid);
+    window.print(mid);
+
+    blacklist_up.print();
+    blacklist_down.print();
 
     max_path = Math.max(score, max_path);
 
@@ -137,14 +105,13 @@ class CLCSFast {
 
     // find top, copy to bottom
 
-    max_path = SolveWindow (0);
+    max_path = window.solve (0);
 
-    updateBlacklist (0);
-    updateBlacklist (M.length);
+    updateBlacklists (0);
+    updateBlacklists (M.length);
 
-    printWindow(0);
-
-    System.out.println(blacklist);
+    blacklist_up.print();
+    blacklist_down.print();
 
     findShortestPaths (1, M.length);
 
@@ -166,11 +133,140 @@ class CLCSFast {
       M = (A.length > B.length) ? B : A;
       N = (A.length > B.length) ? A : B;
 
-      window = new int[M.length][N.length];
-      blacklist = new Blacklist(M.length, N.length);
+      window = new Window(M.length, N.length);
+      blacklist_up = new Blacklist(M.length, N.length);
+      blacklist_down = new Blacklist(M.length, N.length);
 
       System.out.format("%d\n",SolveCLCSFast ());
     }
+  }
+
+
+}
+
+class Window {
+  private int [][] window_frame;
+  private int size_m;
+  private int size_n;
+
+  private int[] row_max;
+  private int[] col_max;
+
+  public Window (int size_m, int size_n) {
+    this.window_frame = new int[size_m][size_n];
+    this.col_max = new int[size_m];
+    this.row_max = new int[size_n];
+
+    this.size_m = size_m;
+    this.size_n = size_n;
+  }
+
+  public void print (int offset_y) {
+    if (CLCSFast.DEBUG) {
+      System.out.format("\nWindow: offset_y = %d\n", offset_y);
+      System.out.format("row_max: [");
+      for (int i = 0; i < row_max.length; i++) {
+        if (i!=0)
+          System.out.format(",");  
+        System.out.format("%d", row_max[i]);
+      }
+      System.out.format("]\tcol_max: [");
+      for (int i = 0; i < col_max.length; i++) {
+        if (i!=0)
+          System.out.format(",");  
+        System.out.format("%d", col_max[i]);
+      }
+      System.out.format("]\n\t");
+      for (int col = 0; col < this.size_n; col++) {
+        System.out.format(" %c ", CLCSFast.getNChar(col));
+      }
+
+      System.out.format("\n");
+      for (int row = 0; row < this.size_m; row++) {
+        System.out.format("%c\t", CLCSFast.getMChar(row, offset_y));
+        for (int col = 0; col < this.size_n; col++) {
+          if (this.window_frame[row][col] < 0 || this.window_frame[row][col] > 10)
+            System.out.format("%d ", this.window_frame[row][col]);
+          else  
+            System.out.format(" %d ", this.window_frame[row][col]);
+        }
+        System.out.format("\n");
+      }
+      System.out.format("\n");
+    }
+  }
+
+  public int getCell(int row, int col, int offset_y) {
+    if (row < 0 || col < 0)
+      return 0;
+    if (col > this.col_max[row])
+      return this.window_frame[row][this.col_max[row]];
+    if (row > this.row_max[col])
+      return this.window_frame[this.row_max[col]][col];
+    return this.window_frame[row][col];
+  }
+
+  public void clear() {
+    System.out.println("WARNING::: illegal to call clear in submission");
+
+    for (int row = 0; row < this.size_m; row++) {
+      for (int col = 0; col < this.size_n; col++) {
+        this.window_frame[row][col] = -1;
+      }
+    }
+
+    for (int i = 0; i < this.col_max.length; i++) {
+      this.col_max[i] = -1;
+    }
+
+    for (int i = 0; i < this.row_max.length; i++) {
+      this.row_max[i] = -1;
+    }
+
+  }
+
+  private int getRowHint (int col) {
+    if (col == 0)
+      return 0;
+    return this.row_max[col - 1];
+  }
+
+  private int getColHint (int row) {
+    if (row == 0)
+      return 0;
+    return this.col_max[row - 1];
+  }
+
+  public int solve (int offset_y) { 
+    int max_col = this.size_n;
+
+    /* get col bounds */
+    for (int col = 0; col < max_col; col++) {
+      this.row_max[col] = CLCSFast.blacklist_down.getMaxRow(getRowHint (col), col, offset_y); // TODO: tighter hint bound
+    }
+
+    for (int row = 0; row < this.size_m; row++) {
+
+      max_col = CLCSFast.blacklist_up.getMaxCol(row, getColHint(row), offset_y); // TODO: tighter hint bound
+      this.col_max[row] = max_col;
+
+      for (int col = 0; col <= max_col; col++) {
+
+        if (row > this.row_max[col])
+          continue;
+
+        this.window_frame[row][col] = Math.max(
+                        this.getCell(row - 1, col, offset_y),
+                        this.getCell(row, col - 1, offset_y));
+
+        if (CLCSFast.charMatchAt(row, col, offset_y))
+          window_frame[row][col] = Math.max(
+                        this.getCell(row, col, offset_y),
+                        this.getCell(row - 1, col - 1, offset_y) + 1);
+      }
+    }
+
+    return window_frame[this.size_m - 1][this.size_n - 1];
   }
 
 
@@ -183,80 +279,77 @@ class Blacklist {
   private byte[][][] blacklist_bitmap;
   private int size_m;
   private int size_n;
+  private int size_nodes_m;
+  private int size_nodes_n;
+  private int bitmap_entry_size;
 
   public Blacklist (int size_m, int size_n) {
     assert (size_m != 0 && size_n != 0);
     this.size_m = size_m;
     this.size_n = size_n;
+    this.size_nodes_m = this.size_m * 2 + 1;
+    this.size_nodes_n = this.size_n + 1;
+    this.bitmap_entry_size = ((this.size_nodes_m - 1)/BITS_PER_BYTE) + 1;
 
-    int bitmap_entry_size = ((size_m - 1)/BITS_PER_BYTE) + 1;
-
-    blacklist_bitmap = new byte[size_m * 2][size_n][bitmap_entry_size];
+    /* +1 since it is a node map, not an entry map */
+    blacklist_bitmap = new byte[this.size_nodes_m]
+                    [this.size_nodes_n][bitmap_entry_size];
   }
 
-  @Override
-  public String toString () {
-    String format = "";
+  public void print () {
+    if (CLCSFast.DEBUG) {
+      String format = "";
 
-    for (int row = 0; row < size_m * 2; row++) {
-      for (int col = 0; col < size_n; col++) {
-        format += "\t[";
-        for (int off = 0; off <= size_m; off++) {
-          if ((blacklist_bitmap[row][col][off/BITS_PER_BYTE] 
-                                      & (1 << off%BITS_PER_BYTE)) == 0x0)
-            {
-              format += "_";
-            }
-          else
-            {
-              format += "1";     
-            }
+      for (int row = 0; row < this.size_nodes_m; row++) {
+        for (int col = 0; col < this.size_nodes_n; col++) {
+          format += "\t[";
+          for (int off = 0; off <= size_m; off++) {
+            if ((blacklist_bitmap[row][col][off/BITS_PER_BYTE] 
+                                        & (1 << off%BITS_PER_BYTE)) == 0x0)
+              {
+                format += "-";
+              }
+            else
+              {
+                format += Integer.toString(off);     
+              }
+          }
+          format += "]";
         }
-        format += "]";
+        format += "\n";
       }
-      format += "\n";
-    }
 
-    return format;
+      System.out.print(format);
+    }
   }
 
-  public void setPath (int row, int col, int offset_y) {
-    System.out.format("setPath (%d, %d, %d);\n", row, col, offset_y);
-
-    System.out.format("blacklist_bitmap[%d][%d][%d];\n", row, col, offset_y/BITS_PER_BYTE);
-
-    System.out.format("(%d << (%d));\n", 1, offset_y%BITS_PER_BYTE);
-
-    blacklist_bitmap[row][col][offset_y/BITS_PER_BYTE] 
+  public void blacklist (int row, int col, int offset_y) {
+    if (isValidIndex (row, col, offset_y))
+      blacklist_bitmap[row + offset_y][col][offset_y/BITS_PER_BYTE] 
                                   |= (1 << (offset_y%BITS_PER_BYTE));
   }
 
-  public int leftMostValidRow (int row, int col_hint, int offset_y) {
-    int bound = -1;
-    int new_bound = -1;
-    for (int col = col_hint; col >= 0; col--) {
-
-      new_bound = getBelowBoundPathNum (row, col, offset_y);
-
-      if (new_bound != -1)
-        if (bound != -1 && new_bound != bound)
-          return col + 1;
-        bound = new_bound;
-    }
-    return 0;
+  private boolean isValidIndex (int row, int col, int offset_y) {
+    return ((row + offset_y) < this.size_nodes_m)
+          && (col < this.size_nodes_n);
   }
 
-  public boolean rightIsValidPath (int row, int col, int offset_y) {
-
-    return false;
+  public int getMaxCol (int row, int col_hint, int offset_y) {
+    for (int col = col_hint; col < this.size_nodes_n; col++) {
+      if (getAboveBoundPathNum (row + offset_y, col, offset_y) != -1)
+        return col - 1;
+        
+    }
+    return this.size_n - 1;
   }
 
-  public boolean doesTouchWall (int row, int col, int offset_y) {
-    for (int off = 0; off < size_m; off += BITS_PER_BYTE) {
-      if (blacklist_bitmap[row][col][off/BITS_PER_BYTE] != 0x0)
-        return true;
+  public int getMaxRow (int row_hint, int col, int offset_y) {
+    for (int row = row_hint; row < this.size_nodes_m; row++) {
+      if (getBelowBoundPathNum (row, col, offset_y) != -1)
+        return (row - 1) - offset_y;
+        
     }
-    return false;
+    return this.size_m - 1; //TODO: implement;
   }
 
   private int getBelowBoundPathNum (int row, int col, int offset_y) {
@@ -269,7 +362,7 @@ class Blacklist {
     return -1;
   }
 
-  private int doesTouchAbovePath (int row, int col, int offset_y) { //TODO FIX SAME ISSUE AS getBelowBoundPathNum
+  private int getAboveBoundPathNum (int row, int col, int offset_y) {
     /* iterate over all lower bits, check if bits are on in any */
     for (int off = offset_y; off >= 0; off--) {
       if (((blacklist_bitmap[row][col][off/BITS_PER_BYTE])
