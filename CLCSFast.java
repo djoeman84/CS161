@@ -9,7 +9,8 @@ class CLCSFast {
   static Blacklist blacklist_up;
   static Blacklist blacklist_down;
 
-  static final boolean DEBUG = false;
+  static final boolean DEBUG = true;
+  static final boolean RESET_EACH_ITER = true;
 
   static char getMChar (int row, int offset_y) {
     return M[(row + offset_y) % M.length];
@@ -85,6 +86,7 @@ class CLCSFast {
     // System.out.format("lower: %d upper: %d\n", lower, upper);
 
 
+    window.clear();
     int score = window.solve (mid);
     updateBlacklists (mid);
     window.print(mid);
@@ -207,22 +209,23 @@ class Window {
   }
 
   public void clear() {
-    System.out.println("WARNING::: illegal to call clear in submission");
+    if (CLCSFast.RESET_EACH_ITER) {
+      System.out.println("WARNING::: illegal to call clear in submission");
 
-    for (int row = 0; row < this.size_m; row++) {
-      for (int col = 0; col < this.size_n; col++) {
-        this.window_frame[row][col] = -1;
+      for (int row = 0; row < this.size_m; row++) {
+        for (int col = 0; col < this.size_n; col++) {
+          this.window_frame[row][col] = -1;
+        }
+      }
+
+      for (int i = 0; i < this.col_max.length; i++) {
+        this.col_max[i] = -1;
+      }
+
+      for (int i = 0; i < this.row_max.length; i++) {
+        this.row_max[i] = -1;
       }
     }
-
-    for (int i = 0; i < this.col_max.length; i++) {
-      this.col_max[i] = -1;
-    }
-
-    for (int i = 0; i < this.row_max.length; i++) {
-      this.row_max[i] = -1;
-    }
-
   }
 
   private int getRowHint (int col) {
@@ -275,13 +278,16 @@ class Window {
 
 class Blacklist {
 
-  private static final int BITS_PER_BYTE = 8;
-  private byte[][][] blacklist_bitmap;
+  private static final int NUM_BOUNDS = 2;
+  private static final int ABOVE_INDEX = 0;
+  private static final int BELOW_INDEX = 1;
+
+  private int[][][]   blacklist_bounds;
+  private boolean[][] blacklist_initialized;
   private int size_m;
   private int size_n;
   private int size_nodes_m;
   private int size_nodes_n;
-  private int bitmap_entry_size;
 
   public Blacklist (int size_m, int size_n) {
     assert (size_m != 0 && size_n != 0);
@@ -289,11 +295,11 @@ class Blacklist {
     this.size_n = size_n;
     this.size_nodes_m = this.size_m * 2 + 1;
     this.size_nodes_n = this.size_n + 1;
-    this.bitmap_entry_size = ((this.size_nodes_m - 1)/BITS_PER_BYTE) + 1;
 
     /* +1 since it is a node map, not an entry map */
-    blacklist_bitmap = new byte[this.size_nodes_m]
-                    [this.size_nodes_n][bitmap_entry_size];
+    blacklist_bounds = new int[this.size_nodes_m]
+                      [this.size_nodes_n][NUM_BOUNDS];
+    blacklist_initialized = new boolean[this.size_nodes_m][this.size_nodes_n];
   }
 
   public void print () {
@@ -302,19 +308,18 @@ class Blacklist {
 
       for (int row = 0; row < this.size_nodes_m; row++) {
         for (int col = 0; col < this.size_nodes_n; col++) {
-          format += "\t[";
-          for (int off = 0; off <= size_m; off++) {
-            if ((blacklist_bitmap[row][col][off/BITS_PER_BYTE] 
-                                        & (1 << off%BITS_PER_BYTE)) == 0x0)
-              {
-                format += "-";
-              }
-            else
-              {
-                format += Integer.toString(off);     
-              }
-          }
-          format += "]";
+          if (blacklist_initialized[row][col])
+            {
+              format += "\t(";
+              format += Integer.toString(blacklist_bounds[row][col][ABOVE_INDEX]);
+              format += ",";
+              format += Integer.toString(blacklist_bounds[row][col][BELOW_INDEX]);
+              format += ")";
+            }
+          else
+            {
+              format += "\t(-,-)";
+            }
         }
         format += "\n";
       }
@@ -325,8 +330,25 @@ class Blacklist {
 
   public void blacklist (int row, int col, int offset_y) {
     if (isValidIndex (row, col, offset_y))
-      blacklist_bitmap[row + offset_y][col][offset_y/BITS_PER_BYTE] 
-                                  |= (1 << (offset_y%BITS_PER_BYTE));
+      {
+        int lower = blacklist_bounds[row + offset_y][col][ABOVE_INDEX];
+        int upper = blacklist_bounds[row + offset_y][col][BELOW_INDEX];
+
+        if (!blacklist_initialized[row + offset_y][col])
+          {
+            blacklist_bounds[row + offset_y][col][ABOVE_INDEX] = offset_y;
+            blacklist_bounds[row + offset_y][col][BELOW_INDEX] = offset_y;
+          }
+        else 
+          {
+            if (offset_y < lower)
+              blacklist_bounds[row + offset_y][col][ABOVE_INDEX] = offset_y;
+            if (offset_y > upper)
+              blacklist_bounds[row + offset_y][col][BELOW_INDEX] = offset_y;
+          }
+
+        blacklist_initialized[row + offset_y][col] = true;
+      }
   }
 
   private boolean isValidIndex (int row, int col, int offset_y) {
@@ -349,26 +371,28 @@ class Blacklist {
         return (row - 1) - offset_y;
         
     }
-    return this.size_m - 1; //TODO: implement;
+    return this.size_m - 1;
   }
 
   private int getBelowBoundPathNum (int row, int col, int offset_y) {
-    /* iterate over all higher bits, check if bits are on, return on index */
-    for (int off = offset_y; off < size_m; off++) {
-      if (((blacklist_bitmap[row][col][off/BITS_PER_BYTE])
-                          & (1 << (off%BITS_PER_BYTE))) != 0x0)
-        return off;
-    }
+    /* iterate over all higher bits, check if bits are on, return on index */ 
+    if (!blacklist_initialized[row][col])
+      return -1;
+    if (blacklist_bounds[row][col][ABOVE_INDEX] > offset_y)
+      return blacklist_bounds[row][col][ABOVE_INDEX];
+    if (blacklist_bounds[row][col][BELOW_INDEX] > offset_y)
+      return blacklist_bounds[row][col][BELOW_INDEX];
     return -1;
   }
 
   private int getAboveBoundPathNum (int row, int col, int offset_y) {
     /* iterate over all lower bits, check if bits are on in any */
-    for (int off = offset_y; off >= 0; off--) {
-      if (((blacklist_bitmap[row][col][off/BITS_PER_BYTE])
-                          & (1 << (off%BITS_PER_BYTE))) != 0x0)
-        return off;
-    }
+    if (!blacklist_initialized[row][col])
+      return -1;
+    if (blacklist_bounds[row][col][BELOW_INDEX] < offset_y)
+      return blacklist_bounds[row][col][BELOW_INDEX];
+    if (blacklist_bounds[row][col][ABOVE_INDEX] < offset_y)
+      return blacklist_bounds[row][col][ABOVE_INDEX];
     return -1;
   }
 }
