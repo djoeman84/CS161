@@ -9,8 +9,8 @@ class CLCSFast {
   static Blacklist blacklist_up;
   static Blacklist blacklist_down;
 
-  static final boolean DEBUG = true;
-  static final boolean RESET_EACH_ITER = true;
+  static final boolean DEBUG = false;
+  static final boolean RESET_EACH_ITER = false;
 
   static char getMChar (int row, int offset_y) {
     return M[(row + offset_y) % M.length];
@@ -53,7 +53,8 @@ class CLCSFast {
       int col = node_col - 1;
 
 
-      if (charMatchAt(row, col, offset_y))
+      if (charMatchAt(row, col, offset_y) 
+            && window.isLegalPathCell(row - 1, col - 1))
         {
           node_row--;
           node_col--;
@@ -91,8 +92,14 @@ class CLCSFast {
     updateBlacklists (mid);
     window.print(mid);
 
-    blacklist_up.print();
-    blacklist_down.print();
+    if (DEBUG)
+      {
+        System.out.println(":::blacklist up:::");
+        blacklist_up.print();
+
+        System.out.println(":::blacklist down:::");
+        blacklist_down.print();
+      }
 
     max_path = Math.max(score, max_path);
 
@@ -136,8 +143,10 @@ class CLCSFast {
       N = (A.length > B.length) ? A : B;
 
       window = new Window(M.length, N.length);
-      blacklist_up = new Blacklist(M.length, N.length);
-      blacklist_down = new Blacklist(M.length, N.length);
+      blacklist_up = new Blacklist(M.length, N.length, 
+                                Blacklist.BlacklistType.NORMAL);
+      blacklist_down = new Blacklist(M.length, N.length,
+                                Blacklist.BlacklistType.TRANSPOSE);
 
       System.out.format("%d\n",SolveCLCSFast ());
     }
@@ -196,6 +205,12 @@ class Window {
       }
       System.out.format("\n");
     }
+  }
+
+  public boolean isLegalPathCell (int row, int col) {
+    if (row < 0 || col < 0)
+      return false;
+    return row <= row_max[col];
   }
 
   public int getCell(int row, int col, int offset_y) {
@@ -278,6 +293,10 @@ class Window {
 
 class Blacklist {
 
+  public static enum BlacklistType {
+    NORMAL, TRANSPOSE
+  }
+
   private static final int NUM_BOUNDS = 2;
   private static final int ABOVE_INDEX = 0;
   private static final int BELOW_INDEX = 1;
@@ -289,7 +308,7 @@ class Blacklist {
   private int size_nodes_m;
   private int size_nodes_n;
 
-  public Blacklist (int size_m, int size_n) {
+  public Blacklist (int size_m, int size_n, BlacklistType t) {
     assert (size_m != 0 && size_n != 0);
     this.size_m = size_m;
     this.size_n = size_n;
