@@ -134,11 +134,11 @@ class CLCSFast {
 
   public static void main(String[] args) {
 
-    boolean eclipse = false;
+    boolean eclipse = true;
      
     try {
       if (eclipse)
-        System.setIn(new FileInputStream("./sample2.in"));
+        System.setIn(new FileInputStream("./sample.in"));
     } catch (FileNotFoundException e) {
       e.printStackTrace();
     }
@@ -347,15 +347,9 @@ class Blacklist {
     ABOVE, BELOW
   }
 
-  private static final int ABOVE_SHIFT = 0;
-  private static final int BELOW_SHIFT = 13; // far greater than the max size
-                                                  // of m
+  private static int NUM_BOUNDS = 2;
 
-  private static final int BELOW_MASK = (-1)^((1<<BELOW_SHIFT) - 1);
-  private static final int ABOVE_MASK = ((1<<BELOW_SHIFT) - 1);
-  private static final int LOW_ORDER_MASK = ABOVE_MASK;
-
-  private int[][] blacklist_bounds;
+  private short[][][] blacklist_bounds;
   private int size_m;
   private int size_n;
   private int size_nodes_m;
@@ -374,14 +368,14 @@ class Blacklist {
     if (this.btype == BlacklistType.NORMAL)
       {
         /* +1 since it is a node map, not an entry map */
-        blacklist_bounds = new int[this.size_nodes_m]
-                          [this.size_nodes_n];
+        blacklist_bounds = new short[this.size_nodes_m]
+                          [this.size_nodes_n][NUM_BOUNDS];
       }
     else
       {
         /* +1 since it is a node map, not an entry map */
-        blacklist_bounds = new int[this.size_nodes_n]
-                          [this.size_nodes_m];
+        blacklist_bounds = new short[this.size_nodes_n]
+                          [this.size_nodes_m][NUM_BOUNDS];
       }
   }
 
@@ -436,27 +430,25 @@ class Blacklist {
 
 
   private int getBound (int row, int col, int offset_y, BlacklistBound b) {
-    int shift = (b == BlacklistBound.ABOVE) ? ABOVE_SHIFT : BELOW_SHIFT;
+    int index = (b == BlacklistBound.ABOVE) ? 0 : 1;
     int r = (this.btype == BlacklistType.NORMAL) ? (row + offset_y) : col;
     int c = (this.btype == BlacklistType.NORMAL) ? col : (row + offset_y);
 
-    return ((blacklist_bounds[r][c] >> shift) & LOW_ORDER_MASK) - 1;
+    return (short)(blacklist_bounds[r][c][index] - 1);
   }
 
   private void setBound (int row, int col, int offset_y, BlacklistBound b) {
-    int shift = (b == BlacklistBound.ABOVE) ? ABOVE_SHIFT : BELOW_SHIFT;
-    int mask  = (b == BlacklistBound.ABOVE) ? BELOW_MASK  : ABOVE_MASK;
+    int index = (b == BlacklistBound.ABOVE) ? 0 : 1;
     int r = (this.btype == BlacklistType.NORMAL) ? (row + offset_y) : col;
     int c = (this.btype == BlacklistType.NORMAL) ? col : (row + offset_y);
 
-    blacklist_bounds[r][c] &= mask; // clear out old values
-    blacklist_bounds[r][c] |= ((offset_y + 1) << shift); // set new
+    blacklist_bounds[r][c][index] = (short)(offset_y + 1);
   }
 
   private boolean isInitialized (int row, int col, int offset_y) {
-    return this.btype == BlacklistType.NORMAL ?
-            blacklist_bounds[row + offset_y][col] != 0 :
-            blacklist_bounds[col][row + offset_y] != 0;
+    return  this.btype == BlacklistType.NORMAL ?
+            blacklist_bounds[row + offset_y][col][0] != (short)0 :
+            blacklist_bounds[col][row + offset_y][0] != (short)0;
   }
 
   private boolean isValidIndex (int row, int col, int offset_y) {
