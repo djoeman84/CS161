@@ -1,5 +1,6 @@
 // package clcsFast;
 import java.util.*;
+import java.io.*;
 
 class CLCSFast {
 
@@ -137,7 +138,7 @@ class CLCSFast {
      
     try {
       if (eclipse)
-        System.setIn(new FileInputStream("/home/joe/Documents/CS161/sample2.in"));
+        System.setIn(new FileInputStream("./sample2.in"));
     } catch (FileNotFoundException e) {
       e.printStackTrace();
     }
