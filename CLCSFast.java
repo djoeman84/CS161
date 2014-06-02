@@ -118,6 +118,9 @@ class CLCSFast {
     max_path = window.solve (0);
 
     updateBlacklists (0);
+    blacklist_up.print();
+    blacklist_down.print();
+
     updateBlacklists (M.length);
 
     blacklist_up.print();
@@ -134,11 +137,11 @@ class CLCSFast {
 
   public static void main(String[] args) {
 
-    boolean eclipse = false;
+    boolean eclipse = true;
      
     try {
       if (eclipse)
-        System.setIn(new FileInputStream("./sample2.in"));
+        System.setIn(new FileInputStream("./sample.in"));
     } catch (FileNotFoundException e) {
       e.printStackTrace();
     }
@@ -173,15 +176,6 @@ class Window {
 
   private int[] row_max;
   private int[] col_max;
-
-
-
-  private static final int ZERO_SHIFT = 0;
-  private static final int ONE_SHIFT = 13;
-
-  private static final int ZERO_MASK = (-1)^((1<<ZERO_SHIFT) - 1);
-  private static final int ONE_MASK = ((1<<ZERO_SHIFT) - 1);
-  private static final int LOW_ORDER_MASK = ZERO_MASK;
 
 
 
@@ -357,13 +351,9 @@ class Blacklist {
     ABOVE, BELOW
   }
 
-  private static final int ABOVE_SHIFT = 0;
-  private static final int BELOW_SHIFT = 13; // far greater than the max size
+  private static final int ABOVE_INDEX = 0;
+  private static final int BELOW_INDEX = 1; // far greater than the max size
                                                   // of m
-
-  private static final int BELOW_MASK = (-1)^((1<<BELOW_SHIFT) - 1);
-  private static final int ABOVE_MASK = ((1<<BELOW_SHIFT) - 1);
-  private static final int LOW_ORDER_MASK = ABOVE_MASK;
 
   private int[][] blacklist_bounds;
   private int size_m;
@@ -446,21 +436,21 @@ class Blacklist {
 
 
   private int getBound (int row, int col, int offset_y, BlacklistBound b) {
-    int shift = (b == BlacklistBound.ABOVE) ? ABOVE_SHIFT : BELOW_SHIFT;
+    int index = ((b == BlacklistBound.ABOVE) ? ABOVE_INDEX : BELOW_INDEX);
     int r = (this.btype == BlacklistType.NORMAL) ? (row + offset_y) : col;
     int c = (this.btype == BlacklistType.NORMAL) ? col : (row + offset_y);
 
-    return ((blacklist_bounds[r][c] >> shift) & LOW_ORDER_MASK) - 1;
+    return BitMasker.getIndex(index, blacklist_bounds[r][c]) - 1;
   }
 
   private void setBound (int row, int col, int offset_y, BlacklistBound b) {
-    int shift = (b == BlacklistBound.ABOVE) ? ABOVE_SHIFT : BELOW_SHIFT;
-    int mask  = (b == BlacklistBound.ABOVE) ? BELOW_MASK  : ABOVE_MASK;
+
+    int index = ((b == BlacklistBound.ABOVE) ? ABOVE_INDEX : BELOW_INDEX);
     int r = (this.btype == BlacklistType.NORMAL) ? (row + offset_y) : col;
     int c = (this.btype == BlacklistType.NORMAL) ? col : (row + offset_y);
 
-    blacklist_bounds[r][c] &= mask; // clear out old values
-    blacklist_bounds[r][c] |= ((offset_y + 1) << shift); // set new
+    blacklist_bounds[r][c] = 
+            BitMasker.update(index, blacklist_bounds[r][c], (offset_y + 1));
   }
 
   private boolean isInitialized (int row, int col, int offset_y) {
@@ -512,5 +502,38 @@ class Blacklist {
     if (getBound(row, col, 0, BlacklistBound.BELOW) < offset_y)
       return getBound(row, col, 0, BlacklistBound.BELOW);
     return -1;
+  }
+}
+
+
+
+class BitMasker {
+  public static int ZERO = 0;
+  public static int ONE = 1;
+
+  private static final int ZERO_SHIFT = 0;
+  private static final int ONE_SHIFT  = 16; /* split 32 in half */
+
+
+  private static final int MASK_SHOW_LOWER = ((1<<ONE_SHIFT) - 1);
+  private static final int MASK_HIDE_LOWER = (-1)^((1<<ONE_SHIFT) - 1);
+
+
+  private static final int MASK_SHOW_ZERO = MASK_SHOW_LOWER;
+  private static final int MASK_HIDE_ZERO = MASK_HIDE_LOWER;
+
+  private static final int MASK_SHOW_ONE  = MASK_HIDE_LOWER;
+  private static final int MASK_HIDE_ONE  = MASK_SHOW_LOWER;
+
+  public static int getIndex (int index, int storage_value) {
+    int shift = (index == ZERO) ? ZERO_SHIFT : ONE_SHIFT;
+    return (storage_value >> shift) & MASK_SHOW_LOWER;
+  }
+
+  public static int update (int index, int storage_value, int insert_value) {
+    int shift = (index == ZERO) ? ZERO_SHIFT : ONE_SHIFT;
+    int mask  = (index == ZERO) ? MASK_HIDE_ZERO : MASK_HIDE_ONE;
+    storage_value &= mask; // remove old bits in section
+    return (storage_value | (insert_value << shift));
   }
 }
