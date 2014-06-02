@@ -132,6 +132,16 @@ class CLCSFast {
 
 
   public static void main(String[] args) {
+
+    boolean eclipse = true;
+     
+    try {
+      if (eclipse)
+        System.setIn(new FileInputStream("/home/joe/Documents/CS161/sample2.in"));
+    } catch (FileNotFoundException e) {
+      e.printStackTrace();
+    }
+
     char[] A, B;
     Scanner s = new Scanner(System.in);
     int T = s.nextInt();
