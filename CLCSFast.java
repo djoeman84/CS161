@@ -167,22 +167,12 @@ class CLCSFast {
 }
 
 class Window {
-  private int [][] window_frame;
+  private short [][] window_frame;
   private int size_m;
   private int size_n;
 
-  private int[] row_max;
-  private int[] col_max;
-
-
-
-  private static final int ZERO_SHIFT = 0;
-  private static final int ONE_SHIFT = 13;
-
-  private static final int ZERO_MASK = (-1)^((1<<ZERO_SHIFT) - 1);
-  private static final int ONE_MASK = ((1<<ZERO_SHIFT) - 1);
-  private static final int LOW_ORDER_MASK = ZERO_MASK;
-
+  private short[] row_max;
+  private short[] col_max;
 
 
   public Window (int size_m, int size_n) {
@@ -247,37 +237,37 @@ class Window {
   }
 
   public void initWindowCells() {
-    this.window_frame = new int[this.size_m][this.size_n];
+    this.window_frame = new short[this.size_m][this.size_n];
   }
 
   public int getCell(int row, int col) {
-    return this.window_frame[row][col];
+    return (int) this.window_frame[row][col];
   }
 
   public void setCell(int row, int col, int value) {
-    this.window_frame[row][col] = value;
+    this.window_frame[row][col] = (short)value;
   }
 
 
   public void initMaxArrs() {
-    this.col_max = new int[this.size_m];
-    this.row_max = new int[this.size_n];
+    this.col_max = new short[this.size_m];
+    this.row_max = new short[this.size_n];
   }
 
   public void setMaxRowCell(int col, int value) {
-    this.row_max[col] = value;
+    this.row_max[col] = (short)value;
   }
 
   public int getMaxRowCell(int col) {
-    return this.row_max[col];
+    return (int)this.row_max[col];
   }
 
   public void setMaxColCell(int row, int value) {
-    this.col_max[row] = value;
+    this.col_max[row] = (short)value;
   }
 
   public int getMaxColCell(int row) {
-    return this.col_max[row];
+    return (int)this.col_max[row];
   }
 
   public void clear() {
