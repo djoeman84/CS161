@@ -134,7 +134,7 @@ class CLCSFast {
 
   public static void main(String[] args) {
 
-    boolean eclipse = true;
+    boolean eclipse = false;
      
     try {
       if (eclipse)
@@ -174,29 +174,41 @@ class Window {
   private int[] row_max;
   private int[] col_max;
 
+
+
+  private static final int ZERO_SHIFT = 0;
+  private static final int ONE_SHIFT = 13;
+
+  private static final int ZERO_MASK = (-1)^((1<<ZERO_SHIFT) - 1);
+  private static final int ONE_MASK = ((1<<ZERO_SHIFT) - 1);
+  private static final int LOW_ORDER_MASK = ZERO_MASK;
+
+
+
   public Window (int size_m, int size_n) {
-    this.window_frame = new int[size_m][size_n];
-    this.col_max = new int[size_m];
-    this.row_max = new int[size_n];
+    
 
     this.size_m = size_m;
     this.size_n = size_n;
+
+    this.initWindowCells();
+    this.initMaxArrs();
   }
 
   public void print (int offset_y) {
     if (CLCSFast.DEBUG) {
       System.out.format("\nWindow: offset_y = %d\n", offset_y);
       System.out.format("row_max: [");
-      for (int i = 0; i < row_max.length; i++) {
+      for (int i = 0; i < this.size_n; i++) {
         if (i!=0)
           System.out.format(",");  
-        System.out.format("%d", row_max[i]);
+        System.out.format("%d", this.getMaxRowCell(i));
       }
       System.out.format("]\tcol_max: [");
-      for (int i = 0; i < col_max.length; i++) {
+      for (int i = 0; i < this.size_m; i++) {
         if (i!=0)
           System.out.format(",");  
-        System.out.format("%d", col_max[i]);
+        System.out.format("%d", this.getMaxColCell(i));
       }
       System.out.format("]\n\t");
       for (int col = 0; col < this.size_n; col++) {
@@ -207,10 +219,10 @@ class Window {
       for (int row = 0; row < this.size_m; row++) {
         System.out.format("%c\t", CLCSFast.getMChar(row, offset_y));
         for (int col = 0; col < this.size_n; col++) {
-          if (this.window_frame[row][col] < 0 || this.window_frame[row][col] > 10)
-            System.out.format("%d ", this.window_frame[row][col]);
+          if (getCell(row, col) < 0 || getCell(row, col) > 10)
+            System.out.format("%d ", getCell(row, col));
           else  
-            System.out.format(" %d ", this.window_frame[row][col]);
+            System.out.format(" %d ", getCell(row, col));
         }
         System.out.format("\n");
       }
@@ -221,49 +233,80 @@ class Window {
   public boolean isLegalPathCell (int row, int col) {
     if (row < 0 || col < 0)
       return false;
-    return row <= row_max[col];
+    return row <= this.getMaxRowCell(col);
   }
 
   public int getCell(int row, int col, int offset_y) {
     if (row < 0 || col < 0)
       return 0;
-    if (col > this.col_max[row])
-      return this.window_frame[row][this.col_max[row]];
-    if (row > this.row_max[col])
-      return this.window_frame[this.row_max[col]][col];
+    if (col > this.getMaxColCell(row))
+      return this.getCell(row, this.getMaxColCell(row));
+    if (row > this.getMaxRowCell(col))
+      return this.getCell(this.getMaxRowCell(col),col);
+    return this.getCell(row, col);
+  }
+
+  public void initWindowCells() {
+    this.window_frame = new int[this.size_m][this.size_n];
+  }
+
+  public int getCell(int row, int col) {
     return this.window_frame[row][col];
+  }
+
+  public void setCell(int row, int col, int value) {
+    this.window_frame[row][col] = value;
+  }
+
+
+  public void initMaxArrs() {
+    this.col_max = new int[this.size_m];
+    this.row_max = new int[this.size_n];
+  }
+
+  public void setMaxRowCell(int col, int value) {
+    this.row_max[col] = value;
+  }
+
+  public int getMaxRowCell(int col) {
+    return this.row_max[col];
+  }
+
+  public void setMaxColCell(int row, int value) {
+    this.col_max[row] = value;
+  }
+
+  public int getMaxColCell(int row) {
+    return this.col_max[row];
   }
 
   public void clear() {
     if (CLCSFast.RESET_EACH_ITER) {
       System.out.println("WARNING::: illegal to call clear in submission");
 
-      for (int row = 0; row < this.size_m; row++) {
-        for (int col = 0; col < this.size_n; col++) {
-          this.window_frame[row][col] = -1;
-        }
-      }
+      for (int row = 0; row < this.size_m; row++)
+        for (int col = 0; col < this.size_n; col++)
+          setCell(row, col, -1);
 
-      for (int i = 0; i < this.col_max.length; i++) {
-        this.col_max[i] = -1;
-      }
+      for (int i = 0; i < this.size_m; i++)
+        this.setMaxColCell(i, -1);
 
-      for (int i = 0; i < this.row_max.length; i++) {
-        this.row_max[i] = -1;
-      }
+      for (int i = 0; i < this.size_n; i++)
+        this.setMaxRowCell(i, -1);
+
     }
   }
 
   private int getRowHint (int col) {
     if (col == 0)
       return 0;
-    return this.row_max[col - 1];
+    return this.getMaxRowCell(col - 1);
   }
 
   private int getColHint (int row) {
     if (row == 0)
       return 0;
-    return this.col_max[row - 1];
+    return this.getMaxColCell(row - 1);
   }
 
   public int solve (int offset_y) { 
@@ -271,33 +314,33 @@ class Window {
 
     /* get col bounds */
     for (int col = 0; col < max_col; col++) {
-      this.row_max[col] = CLCSFast.blacklist_down
-                        .getMaxRow(getRowHint (col), col, offset_y);
+      this.setMaxRowCell(col, 
+          CLCSFast.blacklist_down.getMaxRow(getRowHint (col), col, offset_y));
     }
 
     for (int row = 0; row < this.size_m; row++) {
 
       max_col = CLCSFast.blacklist_up
                               .getMaxCol(row, getColHint(row), offset_y);
-      this.col_max[row] = max_col;
+
+      this.setMaxColCell(row, max_col);
 
       for (int col = 0; col <= max_col; col++) {
 
-        if (row > this.row_max[col])
+        if (row > this.getMaxRowCell(col))
           continue;
 
-        this.window_frame[row][col] = Math.max(
-                        this.getCell(row - 1, col, offset_y),
-                        this.getCell(row, col - 1, offset_y));
+        setCell(row, col, Math.max(this.getCell(row - 1, col, offset_y),
+                                    this.getCell(row, col - 1, offset_y)));
 
         if (CLCSFast.charMatchAt(row, col, offset_y))
-          window_frame[row][col] = Math.max(
-                        this.getCell(row, col, offset_y),
-                        this.getCell(row - 1, col - 1, offset_y) + 1);
+          setCell(row, col, Math.max(
+                                this.getCell(row, col, offset_y),
+                                this.getCell(row - 1, col - 1, offset_y) + 1));
       }
     }
 
-    return window_frame[this.size_m - 1][this.size_n - 1];
+    return getCell(this.size_m - 1, this.size_n - 1);
   }
 
 
@@ -315,11 +358,12 @@ class Blacklist {
   }
 
   private static final int ABOVE_SHIFT = 0;
-  private static final int BELOW_SHIFT = 12; // far greater than the max size
+  private static final int BELOW_SHIFT = 13; // far greater than the max size
                                                   // of m
 
   private static final int BELOW_MASK = (-1)^((1<<BELOW_SHIFT) - 1);
   private static final int ABOVE_MASK = ((1<<BELOW_SHIFT) - 1);
+  private static final int LOW_ORDER_MASK = ABOVE_MASK;
 
   private int[][] blacklist_bounds;
   private int size_m;
@@ -406,7 +450,7 @@ class Blacklist {
     int r = (this.btype == BlacklistType.NORMAL) ? (row + offset_y) : col;
     int c = (this.btype == BlacklistType.NORMAL) ? col : (row + offset_y);
 
-    return ((blacklist_bounds[r][c] >> shift) & ABOVE_MASK) - 1;
+    return ((blacklist_bounds[r][c] >> shift) & LOW_ORDER_MASK) - 1;
   }
 
   private void setBound (int row, int col, int offset_y, BlacklistBound b) {
