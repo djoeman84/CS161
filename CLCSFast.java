@@ -12,6 +12,7 @@ class CLCSFast {
 
   static final boolean DEBUG = false;
   static final boolean RESET_EACH_ITER = false;
+  static final boolean PIPE_STDIN = true;
 
   static char getMChar (int row, int offset_y) {
     return M[(row + offset_y) % M.length];
@@ -134,11 +135,9 @@ class CLCSFast {
 
 
   public static void main(String[] args) {
-
-    boolean eclipse = false;
      
     try {
-      if (eclipse)
+      if (PIPE_STDIN)
         System.setIn(new FileInputStream("./sample.in"));
     } catch (FileNotFoundException e) {
       e.printStackTrace();
