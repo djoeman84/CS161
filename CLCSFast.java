@@ -416,6 +416,25 @@ class Blacklist {
   private static final int BELOW_INDEX = 1; // far greater than the max size
                                                   // of m
 
+
+
+  public static int ZERO = 0;
+  public static int ONE = 1;
+
+  private static final int ZERO_SHIFT = 0;
+  private static final int ONE_SHIFT  = 16; /* split 32 in half */
+
+
+  private static final int MASK_SHOW_LOWER = ((1<<ONE_SHIFT) - 1);
+  private static final int MASK_HIDE_LOWER = (-1)^((1<<ONE_SHIFT) - 1);
+
+
+  private static final int MASK_SHOW_ZERO = MASK_SHOW_LOWER;
+  private static final int MASK_HIDE_ZERO = MASK_HIDE_LOWER;
+
+  private static final int MASK_SHOW_ONE  = MASK_HIDE_LOWER;
+  private static final int MASK_HIDE_ONE  = MASK_SHOW_LOWER;
+
   private int[][] blacklist_bounds;
   private int size_m;
   private int size_n;
@@ -493,21 +512,22 @@ class Blacklist {
 
 
   private int getBound (int row, int col, int offset_y, BlacklistBound b) {
-    int index = ((b == BlacklistBound.ABOVE) ? ABOVE_INDEX : BELOW_INDEX);
     int r = (this.btype == BlacklistType.NORMAL) ? (row + offset_y) : col;
     int c = (this.btype == BlacklistType.NORMAL) ? col : (row + offset_y);
+    int shift = (b == BlacklistBound.ABOVE) ? ZERO_SHIFT : ONE_SHIFT;
 
-    return BitMasker.getIndex(index, blacklist_bounds[r][c]) - 1;
+    return ((blacklist_bounds[r][c] >> shift) & MASK_SHOW_LOWER) - 1;
   }
 
   private void setBound (int row, int col, int offset_y, BlacklistBound b) {
-
-    int index = ((b == BlacklistBound.ABOVE) ? ABOVE_INDEX : BELOW_INDEX);
     int r = (this.btype == BlacklistType.NORMAL) ? (row + offset_y) : col;
     int c = (this.btype == BlacklistType.NORMAL) ? col : (row + offset_y);
 
-    blacklist_bounds[r][c] = 
-            BitMasker.update(index, blacklist_bounds[r][c], (offset_y + 1));
+    int shift = (b == BlacklistBound.ABOVE) ? ZERO_SHIFT : ONE_SHIFT;
+    int mask  = (b == BlacklistBound.ABOVE) ? MASK_HIDE_ZERO : MASK_HIDE_ONE;
+
+    blacklist_bounds[r][c] &= mask; // remove old bits in section
+    blacklist_bounds[r][c] |= ((offset_y + 1) << shift);
   }
 
   private boolean isInitialized (int row, int col, int offset_y) {
@@ -556,35 +576,3 @@ class Blacklist {
   }
 }
 
-
-
-class BitMasker {
-  public static int ZERO = 0;
-  public static int ONE = 1;
-
-  private static final int ZERO_SHIFT = 0;
-  private static final int ONE_SHIFT  = 16; /* split 32 in half */
-
-
-  private static final int MASK_SHOW_LOWER = ((1<<ONE_SHIFT) - 1);
-  private static final int MASK_HIDE_LOWER = (-1)^((1<<ONE_SHIFT) - 1);
-
-
-  private static final int MASK_SHOW_ZERO = MASK_SHOW_LOWER;
-  private static final int MASK_HIDE_ZERO = MASK_HIDE_LOWER;
-
-  private static final int MASK_SHOW_ONE  = MASK_HIDE_LOWER;
-  private static final int MASK_HIDE_ONE  = MASK_SHOW_LOWER;
-
-  public static int getIndex (int index, int storage_value) {
-    int shift = (index == ZERO) ? ZERO_SHIFT : ONE_SHIFT;
-    return (storage_value >> shift) & MASK_SHOW_LOWER;
-  }
-
-  public static int update (int index, int storage_value, int insert_value) {
-    int shift = (index == ZERO) ? ZERO_SHIFT : ONE_SHIFT;
-    int mask  = (index == ZERO) ? MASK_HIDE_ZERO : MASK_HIDE_ONE;
-    storage_value &= mask; // remove old bits in section
-    return (storage_value | (insert_value << shift));
-  }
-}
