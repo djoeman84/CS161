@@ -137,7 +137,7 @@ class CLCSFast {
 
   public static void main(String[] args) {
 
-    boolean eclipse = true;
+    boolean eclipse = false;
      
     try {
       if (eclipse)
