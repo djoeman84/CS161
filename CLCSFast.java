@@ -27,55 +27,51 @@ class CLCSFast {
 
 
   static void updateBlacklists (int offset_y) {
-    int node_row     = M.length;
-    int node_col     = N.length;
+    int row = M.length - 1;
+    int col = N.length - 1;
 
     while(true) {
-      if (node_row == 0 && node_col == 0)
+      if (row == 0 && col == 0)
         {
           return;
         }
 
-      if (node_row == 0)
+      if (row == 0)
         {
-          node_col--;
-          blacklist_down.blacklist(node_row + 1, node_col, offset_y);
+          col--;
+          blacklist_down.blacklist(row + 1, col, offset_y);
           continue;
         }
 
-      if (node_col == 0)
+      if (col == 0)
         {
-          node_row--;
-          blacklist_up.blacklist(node_row, node_col + 1, offset_y);
+          row--;
+          blacklist_up.blacklist(row, col + 1, offset_y);
           continue;         
         }
 
-      int row = node_row - 1;
-      int col = node_col - 1;
+      int type = window.getCellType(row, col);
+
+      switch (type) {
+        case Window.TRANS_DIAG:
+          row--;
+          col--;
+
+          blacklist_up.blacklist(row, col + 1, offset_y);
+          blacklist_down.blacklist(row + 1, col, offset_y);
+          break;
+        case Window.TRANS_LEFT:
+          col--;
+          blacklist_down.blacklist(row + 1, col, offset_y);
+          break;
+        case Window.TRANS_UP:
+          row--;
+          blacklist_up.blacklist(row, col + 1, offset_y);
+          break;
+      }
 
 
-      if (charMatchAt(row, col, offset_y) 
-            && window.isLegalPathCell(row - 1, col - 1))
-        {
-          node_row--;
-          node_col--;
-
-          blacklist_up.blacklist(node_row, node_col + 1, offset_y);
-          blacklist_down.blacklist(node_row + 1, node_col, offset_y);
-          continue;          
-        }
-
-      if (window.getCell(row, col - 1, offset_y) 
-            == window.getCell(row, col, offset_y))
-        {
-          node_col--;
-          blacklist_down.blacklist(node_row + 1, node_col, offset_y);
-        }
-      else
-        {
-          node_row--;
-          blacklist_up.blacklist(node_row, node_col + 1, offset_y);
-        }
+      continue;
     }
   }
 
@@ -118,7 +114,12 @@ class CLCSFast {
     max_path = window.solve (0);
 
     updateBlacklists (0);
+    blacklist_up.print();
+    blacklist_down.print();
+
+    window.print(0);
     updateBlacklists (M.length);
+
 
     blacklist_up.print();
     blacklist_down.print();
@@ -134,7 +135,7 @@ class CLCSFast {
 
   public static void main(String[] args) {
 
-    boolean eclipse = true;
+    boolean eclipse = false;
      
     try {
       if (eclipse)
@@ -167,12 +168,21 @@ class CLCSFast {
 }
 
 class Window {
-  private short [][] window_frame;
+  private int [][] window_frame;
   private int size_m;
   private int size_n;
 
-  private short[] row_max;
-  private short[] col_max;
+  private int[] row_max;
+  private int[] col_max;
+
+  private static final int CELL_DOESNT_EXIST = -1;
+
+  public static final int TRANS_LEFT = 0;
+  public static final int TRANS_DIAG = 1;
+  public static final int TRANS_UP   = 2;
+
+  private static final int TRANSITION_MASK = 3;
+  private static final int TRANS_VAL_SHIFT = 2;
 
 
   public Window (int size_m, int size_n) {
@@ -216,6 +226,36 @@ class Window {
         }
         System.out.format("\n");
       }
+      System.out.format("\n\t");
+
+
+      for (int col = 0; col < this.size_n; col++) {
+        System.out.format(" %c ", CLCSFast.getNChar(col));
+      }
+
+      System.out.format("\n");
+      for (int row = 0; row < this.size_m; row++) {
+        System.out.format("%c\t", CLCSFast.getMChar(row, offset_y));
+        for (int col = 0; col < this.size_n; col++) {
+          if (getCell(row, col) == -1)
+            System.out.format(" X ");
+          else
+            {
+              switch (this.getCellType(row, col)) {
+                case TRANS_DIAG:
+                  System.out.format(" \\ ");
+                  break;
+                case TRANS_UP:
+                  System.out.format(" ^ ");
+                  break;
+                case TRANS_LEFT:
+                  System.out.format(" < ");
+                  break;
+            }
+          }
+        }
+        System.out.format("\n");
+      }
       System.out.format("\n");
     }
   }
@@ -226,48 +266,50 @@ class Window {
     return row <= this.getMaxRowCell(col);
   }
 
-  public int getCell(int row, int col, int offset_y) {
+  public int getCellSafe(int row, int col) {
     if (row < 0 || col < 0)
       return 0;
-    if (col > this.getMaxColCell(row))
-      return this.getCell(row, this.getMaxColCell(row));
-    if (row > this.getMaxRowCell(col))
-      return this.getCell(this.getMaxRowCell(col),col);
+    if (col > this.getMaxColCell(row) || row > this.getMaxRowCell(col))
+      return -1;
     return this.getCell(row, col);
   }
 
   public void initWindowCells() {
-    this.window_frame = new short[this.size_m][this.size_n];
+    this.window_frame = new int[this.size_m][this.size_n];
   }
 
   public int getCell(int row, int col) {
-    return (int) this.window_frame[row][col];
+    return (this.window_frame[row][col] >> TRANS_VAL_SHIFT);
   }
 
-  public void setCell(int row, int col, int value) {
-    this.window_frame[row][col] = (short)value;
+  public int getCellType(int row, int col) {
+    return this.window_frame[row][col] & TRANSITION_MASK;
+  }
+
+  private void setCell(int row, int col, int value, int trans_type) {
+    this.window_frame[row][col] = (value << TRANS_VAL_SHIFT) + trans_type;
   }
 
 
   public void initMaxArrs() {
-    this.col_max = new short[this.size_m];
-    this.row_max = new short[this.size_n];
+    this.col_max = new int[this.size_m];
+    this.row_max = new int[this.size_n];
   }
 
   public void setMaxRowCell(int col, int value) {
-    this.row_max[col] = (short)value;
+    this.row_max[col] = value;
   }
 
   public int getMaxRowCell(int col) {
-    return (int)this.row_max[col];
+    return this.row_max[col];
   }
 
   public void setMaxColCell(int row, int value) {
-    this.col_max[row] = (short)value;
+    this.col_max[row] = value;
   }
 
   public int getMaxColCell(int row) {
-    return (int)this.col_max[row];
+    return this.col_max[row];
   }
 
   public void clear() {
@@ -276,7 +318,7 @@ class Window {
 
       for (int row = 0; row < this.size_m; row++)
         for (int col = 0; col < this.size_n; col++)
-          setCell(row, col, -1);
+          this.setCell(row, col, -1, TRANS_DIAG);
 
       for (int i = 0; i < this.size_m; i++)
         this.setMaxColCell(i, -1);
@@ -320,13 +362,36 @@ class Window {
         if (row > this.getMaxRowCell(col))
           continue;
 
-        setCell(row, col, Math.max(this.getCell(row - 1, col, offset_y),
-                                    this.getCell(row, col - 1, offset_y)));
+        int left = this.getCellSafe(row, col - 1);
+        int up   = this.getCellSafe(row - 1, col);
+        int diag = this.getCellSafe(row - 1, col - 1);
 
-        if (CLCSFast.charMatchAt(row, col, offset_y))
-          setCell(row, col, Math.max(
-                                this.getCell(row, col, offset_y),
-                                this.getCell(row - 1, col - 1, offset_y) + 1));
+        assert(left   != CELL_DOESNT_EXIST
+              || up   != CELL_DOESNT_EXIST
+              || diag != CELL_DOESNT_EXIST);
+
+        int max_type = TRANS_DIAG;
+        int max_int  = diag + 1;
+
+
+        if (diag == CELL_DOESNT_EXIST ||
+              max_int < left ||
+              !CLCSFast.charMatchAt(row, col, offset_y))
+          {
+            max_type = TRANS_LEFT;
+            max_int  = left;
+          }
+          
+        if (up != CELL_DOESNT_EXIST && max_int < up)
+          {
+            max_type = TRANS_UP;
+            max_int  = up;
+          }
+
+          assert(max_int != CELL_DOESNT_EXIST);
+
+        this.setCell(row, col, max_int, max_type);
+
       }
     }
 
@@ -347,44 +412,42 @@ class Blacklist {
     ABOVE, BELOW
   }
 
-  private static int NUM_BOUNDS = 2;
+  private static final int ABOVE_INDEX = 0;
+  private static final int BELOW_INDEX = 1; // far greater than the max size
+                                                  // of m
 
-  private short[][][] blacklist_bounds;
+  private int[][] blacklist_bounds;
   private int size_m;
   private int size_n;
-  private int size_nodes_m;
-  private int size_nodes_n;
   private BlacklistType btype;
 
   public Blacklist (int size_m, int size_n, BlacklistType t) {
     assert (size_m != 0 && size_n != 0);
-    this.size_m = size_m;
+    this.size_m = 2 * size_m;
     this.size_n = size_n;
-    this.size_nodes_m = this.size_m * 2 + 1;
-    this.size_nodes_n = this.size_n + 1;
     this.btype = t;
 
 
     if (this.btype == BlacklistType.NORMAL)
       {
         /* +1 since it is a node map, not an entry map */
-        blacklist_bounds = new short[this.size_nodes_m]
-                          [this.size_nodes_n][NUM_BOUNDS];
+        blacklist_bounds = new int[this.size_m]
+                          [this.size_n];
       }
     else
       {
         /* +1 since it is a node map, not an entry map */
-        blacklist_bounds = new short[this.size_nodes_n]
-                          [this.size_nodes_m][NUM_BOUNDS];
+        blacklist_bounds = new int[this.size_n]
+                          [this.size_m];
       }
   }
 
   public void print () {
     if (CLCSFast.DEBUG) {
-      String format = "";
+      String format = "\n";
 
-      for (int row = 0; row < this.size_nodes_m; row++) {
-        for (int col = 0; col < this.size_nodes_n; col++) {
+      for (int row = 0; row < this.size_m; row++) {
+        for (int col = 0; col < this.size_n; col++) {
           if (isInitialized(row, col, 0))
             {
               format += "\t(";
@@ -403,7 +466,7 @@ class Blacklist {
         format += "\n";
       }
 
-      System.out.print(format);
+      System.out.print(format + "\n");
     }
   }
 
@@ -430,35 +493,37 @@ class Blacklist {
 
 
   private int getBound (int row, int col, int offset_y, BlacklistBound b) {
-    int index = (b == BlacklistBound.ABOVE) ? 0 : 1;
+    int index = ((b == BlacklistBound.ABOVE) ? ABOVE_INDEX : BELOW_INDEX);
     int r = (this.btype == BlacklistType.NORMAL) ? (row + offset_y) : col;
     int c = (this.btype == BlacklistType.NORMAL) ? col : (row + offset_y);
 
-    return (short)(blacklist_bounds[r][c][index] - 1);
+    return BitMasker.getIndex(index, blacklist_bounds[r][c]) - 1;
   }
 
   private void setBound (int row, int col, int offset_y, BlacklistBound b) {
-    int index = (b == BlacklistBound.ABOVE) ? 0 : 1;
+
+    int index = ((b == BlacklistBound.ABOVE) ? ABOVE_INDEX : BELOW_INDEX);
     int r = (this.btype == BlacklistType.NORMAL) ? (row + offset_y) : col;
     int c = (this.btype == BlacklistType.NORMAL) ? col : (row + offset_y);
 
-    blacklist_bounds[r][c][index] = (short)(offset_y + 1);
+    blacklist_bounds[r][c] = 
+            BitMasker.update(index, blacklist_bounds[r][c], (offset_y + 1));
   }
 
   private boolean isInitialized (int row, int col, int offset_y) {
-    return  this.btype == BlacklistType.NORMAL ?
-            blacklist_bounds[row + offset_y][col][0] != (short)0 :
-            blacklist_bounds[col][row + offset_y][0] != (short)0;
+    return this.btype == BlacklistType.NORMAL ?
+            blacklist_bounds[row + offset_y][col] != 0 :
+            blacklist_bounds[col][row + offset_y] != 0;
   }
 
   private boolean isValidIndex (int row, int col, int offset_y) {
-    return ((row + offset_y) < this.size_nodes_m)
-          && (col < this.size_nodes_n);
+    return ((row + offset_y) < this.size_m)
+          && (col < this.size_n);
   }
 
   public int getMaxCol (int row, int col_hint, int offset_y) {
-    for (int col = col_hint; col < this.size_nodes_n; col++) {
-      if (getAboveBoundPathNum (row + offset_y, col, offset_y) != -1)
+    for (int col = col_hint; col < this.size_n - 1; col++) {
+      if (hasAboveBoundPathNum (row + offset_y, col, offset_y))
         return col - 1;
         
     }
@@ -466,33 +531,60 @@ class Blacklist {
   }
 
   public int getMaxRow (int row_hint, int col, int offset_y) {
-    for (int row = row_hint; row < this.size_nodes_m; row++) {
-      if (getBelowBoundPathNum (row, col, offset_y) != -1)
+    for (int row = row_hint; row < this.size_m - 1; row++) {
+      if (hasBelowBoundPathNum (row, col, offset_y))
         return (row - 1) - offset_y;
         
     }
-    return this.size_m - 1;
+    return (this.size_m/2) - 1;
   }
 
-  private int getBelowBoundPathNum (int row, int col, int offset_y) {
+  private boolean hasBelowBoundPathNum (int row, int col, int offset_y) {
     /* iterate over all higher bits, check if bits are on, return on index */ 
     if (!isInitialized(row, col, 0))
-      return -1;
-    if (getBound(row, col, 0, BlacklistBound.ABOVE) > offset_y)
-      return getBound(row, col, 0, BlacklistBound.ABOVE);
-    if (getBound(row, col, 0, BlacklistBound.BELOW) > offset_y)
-      return getBound(row, col, 0, BlacklistBound.BELOW);
-    return -1;
+      return false;
+    return (getBound(row, col, 0, BlacklistBound.ABOVE) > offset_y ||
+        getBound(row, col, 0, BlacklistBound.BELOW) > offset_y);
   }
 
-  private int getAboveBoundPathNum (int row, int col, int offset_y) {
+  private boolean hasAboveBoundPathNum (int row, int col, int offset_y) {
     /* iterate over all lower bits, check if bits are on in any */
     if (!isInitialized(row, col, 0))
-      return -1;
-    if (getBound(row, col, 0, BlacklistBound.ABOVE) < offset_y)
-      return getBound(row, col, 0, BlacklistBound.ABOVE);
-    if (getBound(row, col, 0, BlacklistBound.BELOW) < offset_y)
-      return getBound(row, col, 0, BlacklistBound.BELOW);
-    return -1;
+      return false;
+    return (getBound(row, col, 0, BlacklistBound.ABOVE) < offset_y ||
+        getBound(row, col, 0, BlacklistBound.BELOW) < offset_y);
+  }
+}
+
+
+
+class BitMasker {
+  public static int ZERO = 0;
+  public static int ONE = 1;
+
+  private static final int ZERO_SHIFT = 0;
+  private static final int ONE_SHIFT  = 16; /* split 32 in half */
+
+
+  private static final int MASK_SHOW_LOWER = ((1<<ONE_SHIFT) - 1);
+  private static final int MASK_HIDE_LOWER = (-1)^((1<<ONE_SHIFT) - 1);
+
+
+  private static final int MASK_SHOW_ZERO = MASK_SHOW_LOWER;
+  private static final int MASK_HIDE_ZERO = MASK_HIDE_LOWER;
+
+  private static final int MASK_SHOW_ONE  = MASK_HIDE_LOWER;
+  private static final int MASK_HIDE_ONE  = MASK_SHOW_LOWER;
+
+  public static int getIndex (int index, int storage_value) {
+    int shift = (index == ZERO) ? ZERO_SHIFT : ONE_SHIFT;
+    return (storage_value >> shift) & MASK_SHOW_LOWER;
+  }
+
+  public static int update (int index, int storage_value, int insert_value) {
+    int shift = (index == ZERO) ? ZERO_SHIFT : ONE_SHIFT;
+    int mask  = (index == ZERO) ? MASK_HIDE_ZERO : MASK_HIDE_ONE;
+    storage_value &= mask; // remove old bits in section
+    return (storage_value | (insert_value << shift));
   }
 }
