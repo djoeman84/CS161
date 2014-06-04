@@ -9,3 +9,6 @@ echo "Compiling and running the C++ file $1..."
 g++ -O2 $1 && time ./a.out < sample2.in | java Judge sample2.out
 echo "If user time + system time < 10 seconds, you should be fine for 
 the real test."
+
+
+#g++ -O2 clcs-fast.cpp && time ./a.out < sample2.in
