@@ -12,7 +12,7 @@ class CLCSFast {
 
   static final boolean DEBUG = false;
   static final boolean RESET_EACH_ITER = false;
-  static final boolean PIPE_STDIN = true;
+  static final boolean PIPE_STDIN = false;
 
   static char getMChar (int row, int offset_y) {
     return M[(row + offset_y) % M.length];
